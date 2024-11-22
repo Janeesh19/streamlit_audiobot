@@ -1,8 +1,7 @@
 import os
 import streamlit as st
-import sounddevice as sd
-import numpy as np
-import scipy.io.wavfile as wav
+import pyaudio
+import wave
 from langchain_groq import ChatGroq
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
@@ -18,6 +17,10 @@ GROQ_API_KEY = st.secrets["general"]["GROQ_API_KEY"]
 with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as temp_credentials_file:
     temp_credentials_file.write(st.secrets["general"]["GOOGLE_APPLICATION_CREDENTIALS_CONTENT"].encode())
     google_credentials_path = temp_credentials_file.name
+
+# Set the environment variables
+os.environ["GROQ_API_KEY"] = GROQ_API_KEY
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = google_credentials_path
 
 # Initialize components
 tts_client = texttospeech.TextToSpeechClient()
@@ -93,40 +96,56 @@ def save_audio_to_file(audio_stream, suffix=".mp3"):
         return temp_audio_file.name  # Return the file path
 
 # Function for speech-to-text
-def speech_to_text():
-    recognizer = sr.Recognizer()
-    fs = 44100  # Sampling frequency
-    duration = 7  # Duration in seconds
+def record_audio():
+    FORMAT = pyaudio.paInt16
+    CHANNELS = 1
+    RATE = 44100
+    CHUNK = 1024
+    RECORD_SECONDS = 7
+    audio = pyaudio.PyAudio()
 
     # Create a placeholder for the "Listening..." message
     message_placeholder = st.empty()
-    message_placeholder.info("Listening... Speak now.")  # Display the message
+    message_placeholder.info("Listening... Speak now.")
+
+    # Start recording
+    stream = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
+    frames = []
+
+    for i in range(0, int(RATE / CHUNK * RECORD_SECONDS)):
+        data = stream.read(CHUNK)
+        frames.append(data)
+
+    # Stop recording
+    stream.stop_stream()
+    stream.close()
+    audio.terminate()
+
+    # Clear the "Listening..." message
+    message_placeholder.empty()
+
+    # Save the audio to a temporary file
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_audio_file:
+        wf = wave.open(temp_audio_file.name, 'wb')
+        wf.setnchannels(CHANNELS)
+        wf.setsampwidth(audio.get_sample_size(FORMAT))
+        wf.setframerate(RATE)
+        wf.writeframes(b''.join(frames))
+        wf.close()
+        return temp_audio_file.name
+
+def speech_to_text():
+    recognizer = sr.Recognizer()
+    audio_path = record_audio()
 
     try:
-        # Record audio from the microphone
-        audio_data = sd.rec(int(duration * fs), samplerate=fs, channels=1, dtype='int16')
-        sd.wait()  # Wait until the recording is finished
-
-        # Clear the "Listening..." message
-        message_placeholder.empty()
-
-        # Save audio data to a temporary WAV file
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_audio_file:
-            wav.write(temp_audio_file.name, fs, audio_data)
-            user_audio_path = temp_audio_file.name
-
-        # Recognize speech from the saved audio file
-        with sr.AudioFile(user_audio_path) as source:
+        with sr.AudioFile(audio_path) as source:
             audio = recognizer.record(source)
             text = recognizer.recognize_google(audio)
-
         return text
-
     except sr.UnknownValueError:
-        message_placeholder.empty()
         return "Sorry, I could not understand the audio."
     except sr.RequestError:
-        message_placeholder.empty()
         return "Error: Speech recognition service is unavailable."
 
 # Streamlit interface
