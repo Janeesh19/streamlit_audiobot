@@ -10,10 +10,14 @@ from google.cloud import texttospeech
 import tempfile
 import speech_recognition as sr
 
-# Load environment variables
-GROQ_API_KEY = "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"
-os.environ["GROQ_API_KEY"] = GROQ_API_KEY
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = r"C:\Users\Janeesh\OneDrive\Documents\audiobot_streamlit\singular-arbor-423304-q9-560274262891.json"
+
+# Load environment variables from Streamlit secrets
+GROQ_API_KEY = st.secrets["general"]["GROQ_API_KEY"]
+
+# Write the Google service account JSON to a temporary file
+with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as temp_credentials_file:
+    temp_credentials_file.write(st.secrets["general"]["GOOGLE_APPLICATION_CREDENTIALS_CONTENT"].encode())
+    google_credentials_path = temp_credentials_file.name
 
 # Initialize components
 tts_client = texttospeech.TextToSpeechClient()
