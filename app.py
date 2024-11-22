@@ -1,103 +1,157 @@
+import os
 import streamlit as st
-import openai
-from gtts import gTTS
-from tempfile import NamedTemporaryFile
-from streamlit_webrtc import webrtc_streamer, WebRtcMode, AudioProcessorBase, ClientSettings
-import whisper
-import queue
+import sounddevice as sd
 import numpy as np
+import scipy.io.wavfile as wav
+from langchain_groq import ChatGroq
+from langchain.chains import LLMChain
+from langchain.prompts import PromptTemplate
+from google.cloud import texttospeech
+import tempfile
+import speech_recognition as sr
 
-# Set up OpenAI API Key
-openai.api_key = st.secrets["OPENAI_API_KEY"]  # Replace with your OpenAI API key
+# Load environment variables
+GROQ_API_KEY = "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"
+os.environ["GROQ_API_KEY"] = GROQ_API_KEY
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = r"C:\Users\Janeesh\OneDrive\Documents\audiobot_streamlit\singular-arbor-423304-q9-560274262891.json"
 
-# Whisper Model for Speech-to-Text
-model = whisper.load_model("base")  # Whisper for real-time transcription
+# Initialize components
+tts_client = texttospeech.TextToSpeechClient()
+llm = ChatGroq(temperature=0, model_name="mixtral-8x7b-32768")
 
-# GPT-3.5 API Interaction
-def ask_gpt(prompt):
-    try:
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "system", "content": "You are an AI assistant."},
-                      {"role": "user", "content": prompt}],
-            temperature=0.7,
+# Load document content for context
+with open("creta.txt", "r") as file:
+    document_content = file.read()
+
+# Define prompt template
+combined_prompt = f"""
+Act as an expert telephone sales agent for Hyundai, focusing on selling the Hyundai Creta. Engage with potential customers professionally and effectively. Base all responses on the provided context. Follow these guidelines:
+
+Greeting: Start with a brief, friendly introduction.
+Response Style:
+    For regular questions: Provide crisp, concise answers. Aim for responses under 25 words.
+    For technical questions: Offer more detailed explanations. Limit responses to 2-3 sentences for moderately technical queries, and up to 5 sentences for highly technical questions.
+
+Key Principles:
+    Listen actively to identify customer needs.
+    Match Creta features to customer requirements.
+    Highlight Creta's value proposition succinctly.
+    Address objections briefly but effectively.
+    Guide interested customers to next steps concisely.
+
+Technical Knowledge: For engine specifications, performance metrics, or advanced features, provide accurate, detailed information. Use layman's terms to explain complex features unless the customer demonstrates technical expertise.
+
+Tone: Maintain a friendly, professional tone. Adjust to the customer's communication style.
+Uncertainty Handling: If unsure about a specific detail, briefly acknowledge the need to verify the information.
+
+Always focus exclusively on the Hyundai Creta. Prioritize being helpful, honest, and customer-oriented.
+
+Context:
+{document_content}
+Question: {{question}}
+Helpful Answer:"""
+
+PROMPT = PromptTemplate(input_variables=["question"], template=combined_prompt)
+llm_chain = LLMChain(llm=llm, prompt=PROMPT)
+
+# Initialize chat history
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+
+# Function to generate LLM response
+def generate_response(prompt: str) -> str:
+    response = llm_chain.run(question=prompt)
+    return response
+
+# Function for Text-to-Speech streaming
+def text_to_speech_stream(text: str):
+    chunks = text.split('. ')
+    for chunk in chunks:
+        if not chunk.strip():
+            continue
+
+        synthesis_input = texttospeech.SynthesisInput(text=chunk + '.')
+        voice = texttospeech.VoiceSelectionParams(
+            language_code="en-IN",
+            ssml_gender=texttospeech.SsmlVoiceGender.NEUTRAL
         )
-        return response["choices"][0]["message"]["content"]
-    except Exception as e:
-        return f"Error: {str(e)}"
+        audio_config = texttospeech.AudioConfig(audio_encoding=texttospeech.AudioEncoding.MP3)
+        response = tts_client.synthesize_speech(
+            input=synthesis_input, voice=voice, audio_config=audio_config
+        )
+        yield response.audio_content
 
-# Text-to-Speech Function
-def text_to_speech(text):
-    tts = gTTS(text, lang="en")
-    with NamedTemporaryFile(delete=False, suffix=".mp3") as tmpfile:
-        tts.save(tmpfile.name)
-        return tmpfile.name
+# Function to save audio chunks to a temporary file for playback
+def save_audio_to_file(audio_stream, suffix=".mp3"):
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_audio_file:
+        for chunk in audio_stream:
+            temp_audio_file.write(chunk)
+        return temp_audio_file.name  # Return the file path
 
-# Audio Processor for Real-Time Transcription
-class SpeechToTextProcessor(AudioProcessorBase):
-    def __init__(self):
-        self.audio_buffer = queue.Queue()
-        self.result_text = ""
+# Function for speech-to-text
+def speech_to_text():
+    recognizer = sr.Recognizer()
+    fs = 44100  # Sampling frequency
+    duration = 7  # Duration in seconds
 
-    def recv_audio(self, frame):
-        audio_data = np.frombuffer(frame.to_ndarray(), dtype=np.int16)
-        self.audio_buffer.put(audio_data)
-        return frame
+    # Create a placeholder for the "Listening..." message
+    message_placeholder = st.empty()
+    message_placeholder.info("Listening... Speak now.")  # Display the message
 
-    def transcribe_audio(self):
-        if not self.audio_buffer.empty():
-            audio_frames = []
-            while not self.audio_buffer.empty():
-                audio_frames.append(self.audio_buffer.get())
-            
-            audio_data = np.concatenate(audio_frames, axis=0)
-            audio_path = NamedTemporaryFile(delete=False, suffix=".wav").name
-            with open(audio_path, "wb") as f:
-                f.write(audio_data.tobytes())
-            
-            # Transcribe with Whisper
-            result = model.transcribe(audio_path)
-            self.result_text = result["text"]
-            return self.result_text
-        return ""
+    try:
+        # Record audio from the microphone
+        audio_data = sd.rec(int(duration * fs), samplerate=fs, channels=1, dtype='int16')
+        sd.wait()  # Wait until the recording is finished
 
-# Streamlit App
-def main():
-    st.title("Real-Time Audio Bot 🎙️")
-    st.header("Talk to GPT-3.5 in Real-Time")
+        # Clear the "Listening..." message
+        message_placeholder.empty()
 
-    # WebRTC for Audio Streaming
-    processor = SpeechToTextProcessor()
-    webrtc_ctx = webrtc_streamer(
-        key="real-time-audio",
-        mode=WebRtcMode.SENDRECV,
-        audio_processor_factory=lambda: processor,
-        client_settings=ClientSettings(
-            rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
-            media_stream_constraints={"audio": True, "video": False},
-        ),
-    )
+        # Save audio data to a temporary WAV file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_audio_file:
+            wav.write(temp_audio_file.name, fs, audio_data)
+            user_audio_path = temp_audio_file.name
 
-    if webrtc_ctx.state.playing:
-        st.write("🎤 Listening...")
-        
-        # Transcribe and Interact with GPT-3.5
-        if st.button("Transcribe and Respond"):
-            with st.spinner("Transcribing and generating response..."):
-                user_input = processor.transcribe_audio()
-                if user_input:
-                    st.write(f"**You Said:** {user_input}")
-                    
-                    # Get GPT-3.5 response
-                    response = ask_gpt(user_input)
-                    st.write(f"**GPT-3.5 Says:** {response}")
-                    
-                    # Convert response to audio
-                    audio_file = text_to_speech(response)
-                    audio_bytes = open(audio_file, "rb").read()
-                    st.audio(audio_bytes, format="audio/mp3", start_time=0)
-                else:
-                    st.warning("No audio detected or transcription failed!")
+        # Recognize speech from the saved audio file
+        with sr.AudioFile(user_audio_path) as source:
+            audio = recognizer.record(source)
+            text = recognizer.recognize_google(audio)
 
-if __name__ == "__main__":
-    main()
+        return text
+
+    except sr.UnknownValueError:
+        message_placeholder.empty()
+        return "Sorry, I could not understand the audio."
+    except sr.RequestError:
+        message_placeholder.empty()
+        return "Error: Speech recognition service is unavailable."
+
+# Streamlit interface
+st.title("Hyundai Creta Sales Audiobot")
+st.write("Ask your questions using your voice!")
+
+if st.button("Start Recording"):
+    # Record and process user query
+    user_query = speech_to_text()
+    if user_query:
+        # Add user query to chat history
+        st.session_state.chat_history.append({"role": "user", "content": user_query})
+
+        # Generate bot response
+        with st.spinner("Generating response..."):
+            response = generate_response(user_query)
+            audio_stream = text_to_speech_stream(response)
+
+            # Save bot response audio
+            bot_audio_path = save_audio_to_file(audio_stream)
+            st.session_state.chat_history.append({"role": "bot", "content": response, "audio": bot_audio_path})
+
+# Display chat history with bot's audio
+st.write("### Chat History")
+for message in st.session_state.chat_history:
+    if message["role"] == "user":
+        st.write(f"**You:** {message['content']}")
+    else:
+        st.write(f"**Bot:** {message['content']}")
+        if message.get("audio"):
+            with open(message["audio"], "rb") as audio_file:
+                st.audio(audio_file.read(), format="audio/mp3")
