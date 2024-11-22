@@ -1,7 +1,7 @@
-streamlit==1.25.0
+streamlit>=1.10.0
+numpy>=1.21.0
+scipy>=1.5.0
+google-cloud-texttospeech>=2.11.0
+speechrecognition>=3.8.1
 pyaudio==0.2.13
-numpy==1.24.0
-scipy==1.11.1
-langchain-groq==1.0.0
-google-cloud-texttospeech==2.13.1
-speechrecognition==3.9.0
+langchain-groq>=1.0.0
