@@ -1,15 +1,12 @@
 import os
 import streamlit as st
-import pyaudio
-import numpy as np
-import scipy.io.wavfile as wav
+import wave
 from langchain_groq import ChatGroq
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 from google.cloud import texttospeech
 import tempfile
-import speech_recognition as 
-
+import speech_recognition as sr
 
 # Load environment variables from Streamlit secrets
 GROQ_API_KEY = st.secrets["general"]["GROQ_API_KEY"]
@@ -96,51 +93,11 @@ def save_audio_to_file(audio_stream, suffix=".mp3"):
             temp_audio_file.write(chunk)
         return temp_audio_file.name  # Return the file path
 
-# Function for speech-to-text
-def record_audio():
-    FORMAT = pyaudio.paInt16
-    CHANNELS = 1
-    RATE = 44100
-    CHUNK = 1024
-    RECORD_SECONDS = 7
-    audio = pyaudio.PyAudio()
-
-    # Create a placeholder for the "Listening..." message
-    message_placeholder = st.empty()
-    message_placeholder.info("Listening... Speak now.")
-
-    # Start recording
-    stream = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
-    frames = []
-
-    for i in range(0, int(RATE / CHUNK * RECORD_SECONDS)):
-        data = stream.read(CHUNK)
-        frames.append(data)
-
-    # Stop recording
-    stream.stop_stream()
-    stream.close()
-    audio.terminate()
-
-    # Clear the "Listening..." message
-    message_placeholder.empty()
-
-    # Save the audio to a temporary file
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_audio_file:
-        wf = wave.open(temp_audio_file.name, 'wb')
-        wf.setnchannels(CHANNELS)
-        wf.setsampwidth(audio.get_sample_size(FORMAT))
-        wf.setframerate(RATE)
-        wf.writeframes(b''.join(frames))
-        wf.close()
-        return temp_audio_file.name
-
-def speech_to_text():
+# Function for speech-to-text from uploaded audio
+def speech_to_text(audio_file_path):
     recognizer = sr.Recognizer()
-    audio_path = record_audio()
-
     try:
-        with sr.AudioFile(audio_path) as source:
+        with sr.AudioFile(audio_file_path) as source:
             audio = recognizer.record(source)
             text = recognizer.recognize_google(audio)
         return text
@@ -151,11 +108,19 @@ def speech_to_text():
 
 # Streamlit interface
 st.title("Hyundai Creta Sales Audiobot")
-st.write("Ask your questions using your voice!")
+st.write("Upload an audio file to ask your question!")
 
-if st.button("Start Recording"):
-    # Record and process user query
-    user_query = speech_to_text()
+uploaded_file = st.file_uploader("Upload an audio file (.wav format)", type=["wav"])
+
+if uploaded_file is not None:
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_audio_file:
+        temp_audio_file.write(uploaded_file.read())
+        audio_file_path = temp_audio_file.name
+
+    # Convert speech to text
+    with st.spinner("Processing your audio..."):
+        user_query = speech_to_text(audio_file_path)
+
     if user_query:
         # Add user query to chat history
         st.session_state.chat_history.append({"role": "user", "content": user_query})
