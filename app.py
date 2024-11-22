@@ -1,13 +1,14 @@
 import os
 import streamlit as st
 import pyaudio
-import wave
+import numpy as np
+import scipy.io.wavfile as wav
 from langchain_groq import ChatGroq
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 from google.cloud import texttospeech
 import tempfile
-import speech_recognition as sr
+import speech_recognition as 
 
 
 # Load environment variables from Streamlit secrets
