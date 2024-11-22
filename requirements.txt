@@ -3,4 +3,4 @@ openai
 gtts
 streamlit-webrtc
 pydub
-whisper
+openai-whisper
