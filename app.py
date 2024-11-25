@@ -9,11 +9,8 @@ import speech_recognition as sr
 
 # Load environment variables from Streamlit secrets
 GROQ_API_KEY = st.secrets["general"]["GROQ_API_KEY"]
+GOOGLE_APPLICATION_CREDENTIALS_CONTENT = st.secrets["general"]["GOOGLE_APPLICATION_CREDENTIALS_CONTENT"]
 
-# Write the Google service account JSON to a temporary file
-with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as temp_credentials_file:
-    temp_credentials_file.write(st.secrets["general"]["GOOGLE_APPLICATION_CREDENTIALS_CONTENT"].encode())
-    google_credentials_path = temp_credentials_file.name
 
 # Set the environment variables
 os.environ["GROQ_API_KEY"] = GROQ_API_KEY
