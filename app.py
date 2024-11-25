@@ -8,9 +8,8 @@ import tempfile
 import speech_recognition as sr
 
 # Set up API keys and environment variables
-GROQ_API_KEY = "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"
-os.environ["GROQ_API_KEY"] = GROQ_API_KEY
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = r"C:\Users\Janeesh\OneDrive\Documents\audiobot_streamlit\singular-arbor-423304-q9-560274262891.json"
+GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
+GOOGLE_APPLICATION_CREDENTIALS_CONTENT = st.secrets["GOOGLE_APPLICATION_CREDENTIALS_CONTENT"]
 
 # Initialize components
 tts_client = texttospeech.TextToSpeechClient()
