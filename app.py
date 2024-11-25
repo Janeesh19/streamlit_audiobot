@@ -7,17 +7,20 @@ from google.cloud import texttospeech
 import tempfile
 import speech_recognition as sr
 
-# Load environment variables from Streamlit secrets
-GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
-GOOGLE_APPLICATION_CREDENTIALS_CONTENT = st.secrets["GOOGLE_APPLICATION_CREDENTIALS_CONTENT"]
+# Set up API keys and environment variables
+GROQ_API_KEY = "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"
+os.environ["GROQ_API_KEY"] = GROQ_API_KEY
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = r"C:\Users\Janeesh\OneDrive\Documents\audiobot_streamlit\singular-arbor-423304-q9-560274262891.json"
 
 # Initialize components
 tts_client = texttospeech.TextToSpeechClient()
 llm = ChatGroq(temperature=0, model_name="mixtral-8x7b-32768")
 
 # Load document content for context
-with open("creta.txt", "r") as file:
-    document_content = file.read()
+document_content = """
+Hyundai Creta is a premium SUV with cutting-edge technology, exceptional performance, and an attractive design. 
+It comes with features like a panoramic sunroof, ventilated seats, and multiple driving modes. Powered by a choice of petrol and diesel engines, the Creta offers a balance of performance and efficiency.
+"""
 
 # Define prompt template
 combined_prompt = f"""
@@ -84,13 +87,9 @@ def save_audio_to_file(audio_stream, suffix=".mp3"):
             temp_audio_file.write(chunk)
         return temp_audio_file.name  # Return the file path
 
-# Function for speech-to-text from audio input
-def speech_to_text(audio_bytes):
+# Function for speech-to-text
+def speech_to_text(audio_file_path):
     recognizer = sr.Recognizer()
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_audio_file:
-        temp_audio_file.write(audio_bytes)
-        audio_file_path = temp_audio_file.name
-
     try:
         with sr.AudioFile(audio_file_path) as source:
             audio = recognizer.record(source)
@@ -105,12 +104,22 @@ def speech_to_text(audio_bytes):
 st.title("Hyundai Creta Sales Audiobot")
 st.write("Record or upload an audio query to interact with the bot!")
 
-# Audio Input Widget
-audio_input = st.audio_input("Record your voice message")
+# Audio Recording
+recorded_audio = st.audio_input("Record your voice message")
 
-if audio_input:
+# File Upload Option
+uploaded_file = st.file_uploader("Upload your audio file (.wav format)", type=["wav"])
+
+# Handle Audio Input
+if recorded_audio or uploaded_file:
+    audio_source = recorded_audio if recorded_audio else uploaded_file
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_audio_file:
+        temp_audio_file.write(audio_source.read())
+        audio_file_path = temp_audio_file.name
+
+    # Process audio
     with st.spinner("Processing your audio..."):
-        user_query = speech_to_text(audio_input)
+        user_query = speech_to_text(audio_file_path)
 
     if user_query:
         # Add user query to chat history
