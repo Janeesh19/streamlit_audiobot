@@ -11,11 +11,6 @@ import speech_recognition as sr
 GROQ_API_KEY = st.secrets["general"]["GROQ_API_KEY"]
 GOOGLE_APPLICATION_CREDENTIALS_CONTENT = st.secrets["general"]["GOOGLE_APPLICATION_CREDENTIALS_CONTENT"]
 
-
-# Set the environment variables
-os.environ["GROQ_API_KEY"] = GROQ_API_KEY
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = google_credentials_path
-
 # Initialize components
 tts_client = texttospeech.TextToSpeechClient()
 llm = ChatGroq(temperature=0, model_name="mixtral-8x7b-32768")
