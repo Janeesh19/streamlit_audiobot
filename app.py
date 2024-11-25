@@ -8,8 +8,8 @@ import tempfile
 import speech_recognition as sr
 
 # Load environment variables from Streamlit secrets
-GROQ_API_KEY = st.secrets["general"]["GROQ_API_KEY"]
-GOOGLE_APPLICATION_CREDENTIALS_CONTENT = st.secrets["general"]["GOOGLE_APPLICATION_CREDENTIALS_CONTENT"]
+GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
+GOOGLE_APPLICATION_CREDENTIALS_CONTENT = st.secrets["GOOGLE_APPLICATION_CREDENTIALS_CONTENT"]
 
 # Initialize components
 tts_client = texttospeech.TextToSpeechClient()
