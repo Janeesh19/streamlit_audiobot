@@ -101,19 +101,15 @@ def speech_to_text(audio_file_path):
 
 # Streamlit interface
 st.title("Hyundai Creta Sales Audiobot")
-st.write("Record or upload an audio query to interact with the bot!")
+st.write("Record your audio query to interact with the bot!")
 
 # Audio Recording
 recorded_audio = st.audio_input("Record your voice message")
 
-# File Upload Option
-uploaded_file = st.file_uploader("Upload your audio file (.wav format)", type=["wav"])
-
 # Handle Audio Input
-if recorded_audio or uploaded_file:
-    audio_source = recorded_audio if recorded_audio else uploaded_file
+if recorded_audio:
     with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_audio_file:
-        temp_audio_file.write(audio_source.read())
+        temp_audio_file.write(recorded_audio.read())
         audio_file_path = temp_audio_file.name
 
     # Process audio
