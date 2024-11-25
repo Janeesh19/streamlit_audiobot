@@ -6,7 +6,6 @@ from langchain.prompts import PromptTemplate
 from google.cloud import texttospeech
 import tempfile
 import speech_recognition as sr
-from PyPDF2 import PdfReader
 
 # Load environment variables from Streamlit secrets
 GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
@@ -16,22 +15,9 @@ GOOGLE_APPLICATION_CREDENTIALS_CONTENT = st.secrets["GOOGLE_APPLICATION_CREDENTI
 tts_client = texttospeech.TextToSpeechClient()
 llm = ChatGroq(temperature=0, model_name="mixtral-8x7b-32768")
 
-# UI to upload a .txt or .pdf file
-st.title("Hyundai Creta Sales Audiobot")
-uploaded_file = st.file_uploader("Upload a context file (.txt or .pdf)", type=["txt", "pdf"])
-
-if uploaded_file:
-    # Process the uploaded file
-    if uploaded_file.name.endswith(".txt"):
-        document_content = uploaded_file.read().decode("utf-8")
-    elif uploaded_file.name.endswith(".pdf"):
-        pdf_reader = PdfReader(uploaded_file)
-        document_content = ""
-        for page in pdf_reader.pages:
-            document_content += page.extract_text()
-else:
-    st.error("Please upload a .txt or .pdf file to proceed.")
-    st.stop()
+# Load document content for context
+with open("creta.txt", "r") as file:
+    document_content = file.read()
 
 # Define prompt template
 combined_prompt = f"""
@@ -115,7 +101,8 @@ def speech_to_text(audio_bytes):
     except sr.RequestError:
         return "Error: Speech recognition service is unavailable."
 
-# Streamlit interface for audio query
+# Streamlit interface
+st.title("Hyundai Creta Sales Audiobot")
 st.write("Record or upload an audio query to interact with the bot!")
 
 # Audio Input Widget
