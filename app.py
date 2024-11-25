@@ -19,6 +19,10 @@ with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as temp_credentia
 os.environ["GROQ_API_KEY"] = GROQ_API_KEY
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = google_credentials_path
 
+# Initialize components
+tts_client = texttospeech.TextToSpeechClient()
+llm = ChatGroq(temperature=0, model_name="mixtral-8x7b-32768")
+
 # Load document content for context
 with open("creta.txt", "r") as file:
     document_content = file.read()
@@ -88,9 +92,13 @@ def save_audio_to_file(audio_stream, suffix=".mp3"):
             temp_audio_file.write(chunk)
         return temp_audio_file.name  # Return the file path
 
-# Function for speech-to-text from uploaded audio
-def speech_to_text(audio_file_path):
+# Function for speech-to-text from audio input
+def speech_to_text(audio_bytes):
     recognizer = sr.Recognizer()
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_audio_file:
+        temp_audio_file.write(audio_bytes)
+        audio_file_path = temp_audio_file.name
+
     try:
         with sr.AudioFile(audio_file_path) as source:
             audio = recognizer.record(source)
@@ -103,18 +111,14 @@ def speech_to_text(audio_file_path):
 
 # Streamlit interface
 st.title("Hyundai Creta Sales Audiobot")
-st.write("Upload an audio file to ask your question!")
+st.write("Record or upload an audio query to interact with the bot!")
 
-uploaded_file = st.file_uploader("Upload an audio file (.wav format)", type=["wav"])
+# Audio Input Widget
+audio_input = st.audio_input("Record your voice message")
 
-if uploaded_file is not None:
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_audio_file:
-        temp_audio_file.write(uploaded_file.read())
-        audio_file_path = temp_audio_file.name
-
-    # Convert speech to text
+if audio_input:
     with st.spinner("Processing your audio..."):
-        user_query = speech_to_text(audio_file_path)
+        user_query = speech_to_text(audio_input)
 
     if user_query:
         # Add user query to chat history
